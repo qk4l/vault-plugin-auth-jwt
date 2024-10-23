@@ -201,19 +201,16 @@ func (b *jwtAuthBackend) pathLogin(ctx context.Context, req *logical.Request, d 
 		Metadata: tokenMetadata,
 	}
 
-	policyTemplate := role.TokenPoliciesTemplate
+	if role.TokenPoliciesTemplate != "" {
+		renderedPolicy, err := renderPolicyTemplate(b.Logger(), role.TokenPoliciesTemplate, allClaims)
 
-	// TODO: Enable if clause
-	// if policyTemplate != "" {
-	renderedPolicy, err := renderPolicyTemplate(b.Logger(), policyTemplate, allClaims)
+		if err != nil {
+			return logical.ErrorResponse("failed to render policy template"), err
+		}
 
-	if err != nil {
-		return logical.ErrorResponse("failed to render policy template"), err
+		policies := strings.Split(renderedPolicy, ",")
+		role.TokenPolicies = policies
 	}
-
-	policies := strings.Split(renderedPolicy, ",")
-	role.TokenPolicies = policies
-	// }
 
 	role.PopulateTokenAuth(auth)
 
@@ -224,9 +221,18 @@ func (b *jwtAuthBackend) pathLogin(ctx context.Context, req *logical.Request, d 
 
 func renderPolicyTemplate(logger log.Logger, policyTemplate string, claims map[string]interface{}) (string, error) {
 
-	logger.Warn("Render renderPolicyTemplate: ", policyTemplate)
+	logger.Debug("Render renderPolicyTemplate: ", policyTemplate)
 
-	tmpl, err := template.New("policy").Parse(policyTemplate)
+	// Create a new template and add custom functions
+	tmpl, err := template.New("policy").Funcs(template.FuncMap{
+		"split": strings.Split, // Split the string based on a separator
+		"index": func(slice []string, i int) string { // Safe indexing function for slices
+			if i >= 0 && i < len(slice) {
+				return slice[i]
+			}
+			return ""
+		},
+	}).Parse(policyTemplate)
 	if err != nil {
 		return "", err
 	}

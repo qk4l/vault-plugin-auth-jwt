@@ -166,7 +166,7 @@ in OIDC responses.`,
 user was actively authenticated.`,
 			},
 			"token_policies_template": {
-				Type:        framework.TypeCommaStringSlice,
+				Type:        framework.TypeString,
 				Description: `Template for dynamic policy based JWT claims. Example: default,nomad-{{ .nomad_job_id }}"`,
 			},
 		},
