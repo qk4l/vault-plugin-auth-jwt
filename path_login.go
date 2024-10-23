@@ -4,16 +4,19 @@
 package jwtauth
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
-
 	"github.com/hashicorp/cap/jwt"
 	"github.com/hashicorp/errwrap"
+	log "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/helper/cidrutil"
 	"github.com/hashicorp/vault/sdk/logical"
 	"golang.org/x/oauth2"
+	"strings"
+	"text/template"
 )
 
 func pathLogin(b *jwtAuthBackend) *framework.Path {
@@ -91,6 +94,7 @@ func (b *jwtAuthBackend) getRoleNameAndRoleFromLoginRequest(config *jwtConfig, c
 
 func (b *jwtAuthBackend) pathLogin(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	config, err := b.config(ctx, req.Storage)
+
 	if err != nil {
 		return nil, err
 	}
@@ -197,11 +201,43 @@ func (b *jwtAuthBackend) pathLogin(ctx context.Context, req *logical.Request, d 
 		Metadata: tokenMetadata,
 	}
 
+	policyTemplate := role.TokenPoliciesTemplate
+
+	// TODO: Enable if clause
+	// if policyTemplate != "" {
+	renderedPolicy, err := renderPolicyTemplate(b.Logger(), policyTemplate, allClaims)
+
+	if err != nil {
+		return logical.ErrorResponse("failed to render policy template"), err
+	}
+
+	policies := strings.Split(renderedPolicy, ",")
+	role.TokenPolicies = policies
+	// }
+
 	role.PopulateTokenAuth(auth)
 
 	return &logical.Response{
 		Auth: auth,
 	}, nil
+}
+
+func renderPolicyTemplate(logger log.Logger, policyTemplate string, claims map[string]interface{}) (string, error) {
+
+	logger.Warn("Render renderPolicyTemplate: ", policyTemplate)
+
+	tmpl, err := template.New("policy").Parse(policyTemplate)
+	if err != nil {
+		return "", err
+	}
+
+	var renderedPolicy bytes.Buffer
+	err = tmpl.Execute(&renderedPolicy, claims)
+	if err != nil {
+		return "", err
+	}
+
+	return renderedPolicy.String(), nil
 }
 
 func (b *jwtAuthBackend) pathLoginRenew(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {

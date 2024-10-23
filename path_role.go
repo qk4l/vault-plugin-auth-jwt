@@ -165,6 +165,10 @@ in OIDC responses.`,
 				Description: `Specifies the allowable elapsed time in seconds since the last time the 
 user was actively authenticated.`,
 			},
+			"token_policies_template": {
+				Type:        framework.TypeCommaStringSlice,
+				Description: `Template for dynamic policy based JWT claims. Example: default,nomad-{{ .nomad_job_id }}"`,
+			},
 		},
 		ExistenceCheck: b.pathRoleExistenceCheck,
 		Operations: map[logical.Operation]framework.OperationHandler{
@@ -213,18 +217,19 @@ type jwtRole struct {
 	ClockSkewLeeway time.Duration `json:"clock_skew_leeway"`
 
 	// Role binding properties
-	BoundAudiences       []string               `json:"bound_audiences"`
-	BoundSubject         string                 `json:"bound_subject"`
-	BoundClaimsType      string                 `json:"bound_claims_type"`
-	BoundClaims          map[string]interface{} `json:"bound_claims"`
-	ClaimMappings        map[string]string      `json:"claim_mappings"`
-	UserClaim            string                 `json:"user_claim"`
-	GroupsClaim          string                 `json:"groups_claim"`
-	OIDCScopes           []string               `json:"oidc_scopes"`
-	AllowedRedirectURIs  []string               `json:"allowed_redirect_uris"`
-	VerboseOIDCLogging   bool                   `json:"verbose_oidc_logging"`
-	MaxAge               time.Duration          `json:"max_age"`
-	UserClaimJSONPointer bool                   `json:"user_claim_json_pointer"`
+	BoundAudiences        []string               `json:"bound_audiences"`
+	BoundSubject          string                 `json:"bound_subject"`
+	BoundClaimsType       string                 `json:"bound_claims_type"`
+	BoundClaims           map[string]interface{} `json:"bound_claims"`
+	ClaimMappings         map[string]string      `json:"claim_mappings"`
+	UserClaim             string                 `json:"user_claim"`
+	GroupsClaim           string                 `json:"groups_claim"`
+	OIDCScopes            []string               `json:"oidc_scopes"`
+	AllowedRedirectURIs   []string               `json:"allowed_redirect_uris"`
+	VerboseOIDCLogging    bool                   `json:"verbose_oidc_logging"`
+	MaxAge                time.Duration          `json:"max_age"`
+	UserClaimJSONPointer  bool                   `json:"user_claim_json_pointer"`
+	TokenPoliciesTemplate string                 `json:"token_policies_template"`
 
 	// Deprecated by TokenParams
 	Policies   []string                      `json:"policies"`
@@ -333,6 +338,7 @@ func (b *jwtAuthBackend) pathRoleRead(ctx context.Context, req *logical.Request,
 		"oidc_scopes":             role.OIDCScopes,
 		"verbose_oidc_logging":    role.VerboseOIDCLogging,
 		"max_age":                 int64(role.MaxAge.Seconds()),
+		"token_policies_template": role.TokenPoliciesTemplate,
 	}
 
 	role.PopulateTokenData(d)
@@ -460,6 +466,10 @@ func (b *jwtAuthBackend) pathRoleCreateUpdate(ctx context.Context, req *logical.
 
 	if boundSubject, ok := data.GetOk("bound_subject"); ok {
 		role.BoundSubject = boundSubject.(string)
+	}
+
+	if token_policies_template, ok := data.GetOk("token_policies_template"); ok {
+		role.TokenPoliciesTemplate = token_policies_template.(string)
 	}
 
 	if verboseOIDCLoggingRaw, ok := data.GetOk("verbose_oidc_logging"); ok {
